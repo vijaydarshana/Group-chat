@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat | Group Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="../chat/chat.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar (chat list) -->
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <div class="user-avatar">Y</div>
+        <div class="user-info">
+          <h2>Yashwanth</h2>
+          <p>Online</p>
+        </div>
+      </header>
+
+      <div class="chat-list">
+        <div class="chat-item active">
+          <div class="chat-avatar">GC</div>
+          <div class="chat-meta">
+            <div class="chat-title">Group Chat</div>
+            <div class="chat-last-message">Let’s build this UI 💻</div>
+          </div>
+          <div class="chat-time">10:15</div>
+        </div>
+
+        <div class="chat-item">
+          <div class="chat-avatar">JS</div>
+          <div class="chat-meta">
+            <div class="chat-title">JavaScript Room</div>
+            <div class="chat-last-message">map vs forEach?</div>
+          </div>
+          <div class="chat-time">09:40</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <main class="chat-panel">
+      <!-- Chat header -->
+      <header class="chat-header">
+        <div class="chat-header-left">
+          <div class="chat-avatar large">GC</div>
+          <div>
+            <h2>Group Chat</h2>
+            <p>3 participants • last seen just now</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- Messages area -->
+      <section class="messages" id="messages">
+        <!-- Sample messages (initial) -->
+        <div class="message-row received">
+          <div class="message-bubble">
+            <div class="message-text">Hey! Ready for the chat UI task?</div>
+            <div class="message-meta">
+              <span class="message-time">10:12</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="message-row sent">
+          <div class="message-bubble">
+            <div class="message-text">Yes, I’m building it now 😎</div>
+            <div class="message-meta">
+              <span class="message-time">10:13</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Input area -->
+      <form class="message-input-area" id="message-form">
+        <input
+          type="text"
+          id="message-input"
+          placeholder="Type a message"
+          autocomplete="off"
+        />
+        <button type="submit" class="send-btn">Send</button>
+      </form>
+    </main>
+  </div>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="../chat/chat.js"></script>
+</body>
+</html>
