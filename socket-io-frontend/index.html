@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Socket.IO Frontend</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ✅ Separate CSS -->
+  <link rel="stylesheet" href="../socket-io-frontend/styles.css" />
+</head>
+<body>
+  <h1>Socket.IO Frontend</h1>
+
+  <div id="status" class="status">Connecting...</div>
+
+  <div id="messages" class="messages"></div>
+
+  <form id="message-form" class="message-form">
+    <input
+      type="text"
+      id="message-input"
+      placeholder="Type a message"
+      autocomplete="off"
+    />
+    <button type="submit" id="send-btn" disabled>Send</button>
+  </form>
+
+  <!-- ✅ Socket.IO client -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+  <!-- ✅ Client JS -->
+  <script src="../socket-io-frontend/client.js"></script>
+</body>
+</html>

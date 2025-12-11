@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Personal Chat (search by email)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="personal-chat.css" />
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="personal-container">
+    <aside class="user-list">
+      <h3>Users</h3>
+
+      <div style="margin-bottom:10px;">
+        <input id="search-email" type="email" placeholder="Search by email" style="width:100%;padding:8px;border-radius:6px;border:1px solid #ccc" />
+        <button id="search-btn" style="width:100%;margin-top:8px;padding:8px;border-radius:6px;border:none;background:#0a7cff;color:#fff;cursor:pointer">Search & Join</button>
+      </div>
+
+      <div id="recent-users" style="margin-top:6px;">
+        <!-- optional list of recent or demo users -->
+        <div class="user-item" data-user-id="1" data-user-email="user1@example.com">User 1 — user1@example.com</div>
+        <div class="user-item" data-user-id="2" data-user-email="user2@example.com">User 2 — user2@example.com</div>
+        <div class="user-item" data-user-id="3" data-user-email="user3@example.com">User 3 — user3@example.com</div>
+      </div>
+
+    </aside>
+
+    <section class="chat-section">
+      <div class="chat-header">
+        <span id="chat-header-title">Select or search a user to start</span>
+        <button id="leave-btn" style="float:right;padding:6px 10px;border-radius:6px;border:none;background:#ff5e5e;color:#fff;cursor:pointer">Leave</button>
+      </div>
+
+      <div id="messages" class="messages"></div>
+
+      <form id="message-form" class="input-area">
+        <input id="message-input" type="text" placeholder="Type a message..." autocomplete="off" />
+        <button type="submit">Send</button>
+      </form>
+    </section>
+  </div>
+
+  <script src="personal-chat.js"></script>
+</body>
+</html>

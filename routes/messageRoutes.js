@@ -1,3 +1,4 @@
+// routes/messageRoutes.js
 const express = require("express");
 const auth = require("../middleware/auth");
 const { pool } = require("../config/db");
@@ -6,7 +7,9 @@ const router = express.Router();
 
 /**
  * POST /api/messages
- * Save a chat message + broadcast to all clients
+ * Save a chat message & broadcast via Socket.IO
+ * Body: { message: "hello" }
+ * Auth: Bearer token
  */
 router.post("/", auth, async (req, res) => {
   try {
@@ -18,22 +21,25 @@ router.post("/", auth, async (req, res) => {
         .json({ success: false, message: "Message cannot be empty" });
     }
 
+    const trimmed = message.trim();
+
+    // Save to MySQL
     const [result] = await pool.query(
       "INSERT INTO messages (user_id, message) VALUES (?, ?)",
-      [req.user.id, message.trim()]
+      [req.user.id, trimmed]
     );
 
     const savedMessage = {
       id: result.insertId,
       user_id: req.user.id,
-      message: message.trim(),
+      message: trimmed,
       created_at: new Date(),
     };
 
-    // ✅ Emit WebSocket event
+    // ✅ Broadcast to all connected clients via Socket.IO
     const io = req.app.get("io");
     if (io) {
-      io.emit("new-message", savedMessage); // broadcast to all connected clients
+      io.emit("new-message", savedMessage); // frontend listens on "new-message"
     }
 
     return res.status(201).json({
@@ -42,7 +48,7 @@ router.post("/", auth, async (req, res) => {
       data: savedMessage,
     });
   } catch (err) {
-    console.error("Message create error:", err.message);
+    console.error("Message create error:", err);
     return res
       .status(500)
       .json({ success: false, message: "Server error while storing message" });
@@ -51,7 +57,8 @@ router.post("/", auth, async (req, res) => {
 
 /**
  * GET /api/messages
- * Fetch all messages (history)
+ * Fetch all chat messages (history)
+ * Auth: Bearer token
  */
 router.get("/", auth, async (req, res) => {
   try {
@@ -70,7 +77,7 @@ router.get("/", auth, async (req, res) => {
       messages: rows,
     });
   } catch (err) {
-    console.error("Get messages error:", err.message);
+    console.error("Get messages error:", err);
     return res
       .status(500)
       .json({ success: false, message: "Server error while fetching messages" });

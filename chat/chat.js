@@ -2,12 +2,7 @@
 
 const API_URL = "http://localhost:5000/api/messages";
 
-// DOM elements
-const messagesContainer = document.getElementById("messages");
-const messageForm = document.getElementById("message-form");
-const messageInput = document.getElementById("message-input");
-
-// auth
+// auth info
 const token = localStorage.getItem("token");
 const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 
@@ -15,6 +10,18 @@ if (!token || !currentUser) {
   alert("Please login first");
   window.location.href = "index.html";
 }
+
+// ✅ Socket.IO connection WITH AUTH (JWT)
+const socket = io("http://localhost:5000", {
+  auth: {
+    token: token, // same JWT you use for APIs
+  },
+});
+
+// DOM elements
+const messagesContainer = document.getElementById("messages");
+const messageForm = document.getElementById("message-form");
+const messageInput = document.getElementById("message-input");
 
 /* ---------- Helper: escape HTML ---------- */
 function escapeHtml(unsafe) {
@@ -110,26 +117,25 @@ messageForm.addEventListener("submit", async (e) => {
   const text = messageInput.value.trim();
   if (!text) return;
 
-  // send via HTTP; WebSocket broadcast will handle UI for others
+  // Send via HTTP; WebSocket broadcast will handle UI
   const saved = await sendMessageToServer(text);
   if (saved) {
-    // we *could* skip this since socket will also broadcast to same user,
-    // but for immediate feedback we still append here
-   
+    // ❌ DON'T add UI here – will come via "new-message"
     messageInput.value = "";
     messageInput.focus();
   }
 });
 
-/* ---------- Connect to WebSocket server ---------- */
-const socket = io("http://localhost:5000");
-
-// Listen for new messages from server
+/* ---------- Listen for new messages from server (Socket.IO) ---------- */
 socket.on("new-message", (msg) => {
   // msg = { id, user_id, message, created_at }
-
   const isMine = msg.user_id === currentUser.id;
   addMessageToUI(msg.message, isMine, msg.created_at);
+});
+
+/* ---------- Optional: handle socket errors ---------- */
+socket.on("connect_error", (err) => {
+  console.error("Socket connect error:", err.message);
 });
 
 /* ---------- Initial load ---------- */
