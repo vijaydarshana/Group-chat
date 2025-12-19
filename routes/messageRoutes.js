@@ -1,75 +1,73 @@
 // routes/messageRoutes.js
 const express = require("express");
-const auth = require("../middleware/auth");
-const { pool } = require("../config/db");
-
 const router = express.Router();
+const authMiddleware = require("../middleware/auth");
+const { pool } = require("../config/db");
 
 /**
  * POST /api/messages
- * Save a chat message & broadcast via Socket.IO
- * Body: { message: "hello" }
- * Auth: Bearer token
+ * body: { message, roomId }
  */
-router.post("/", auth, async (req, res) => {
+router.post("/", authMiddleware, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, roomId } = req.body;
 
-    if (!message || !message.trim()) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Message cannot be empty" });
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Message cannot be empty",
+      });
     }
 
-    const trimmed = message.trim();
+    // ✅ REQUIRED FIX
+    const finalRoomId = roomId || "global";
 
-    // Save to MySQL
     const [result] = await pool.query(
-      "INSERT INTO messages (user_id, message) VALUES (?, ?)",
-      [req.user.id, trimmed]
+      "INSERT INTO messages (room_id, user_id, message) VALUES (?, ?, ?)",
+      [finalRoomId, req.user.id, message.trim()]
     );
 
-    const savedMessage = {
+    const saved = {
       id: result.insertId,
+      room_id: finalRoomId,
       user_id: req.user.id,
-      message: trimmed,
+      message: message.trim(),
       created_at: new Date(),
     };
 
-    // ✅ Broadcast to all connected clients via Socket.IO
+    // 🔥 Emit to socket room
     const io = req.app.get("io");
     if (io) {
-      io.emit("new-message", savedMessage); // frontend listens on "new-message"
+      io.to(finalRoomId).emit("new-message", saved);
     }
 
     return res.status(201).json({
       success: true,
       message: "Message stored",
-      data: savedMessage,
+      data: saved,
     });
   } catch (err) {
-    console.error("Message create error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Server error while storing message" });
+    console.error("POST /api/messages error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
 /**
- * GET /api/messages
- * Fetch all chat messages (history)
- * Auth: Bearer token
+ * GET /api/messages?roomId=global
  */
-router.get("/", auth, async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
+    const roomId = req.query.roomId || "global";
+
     const [rows] = await pool.query(
-      `SELECT 
-         id,
-         user_id,
-         message,
-         created_at
+      `SELECT id, room_id, user_id, message, created_at
        FROM messages
-       ORDER BY created_at ASC`
+       WHERE room_id = ?
+       ORDER BY created_at ASC`,
+      [roomId]
     );
 
     return res.json({
@@ -77,10 +75,11 @@ router.get("/", auth, async (req, res) => {
       messages: rows,
     });
   } catch (err) {
-    console.error("Get messages error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Server error while fetching messages" });
+    console.error("GET /api/messages error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 

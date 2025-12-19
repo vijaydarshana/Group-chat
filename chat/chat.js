@@ -1,8 +1,13 @@
-// chat.js
-
+/*********************************
+ * CONFIG
+ *********************************/
 const API_URL = "http://localhost:5000/api/messages";
+const AI_URL = "http://localhost:5000/api/ai";
+const SOCKET_URL = "http://localhost:5000";
 
-// auth info
+/*********************************
+ * AUTH
+ *********************************/
 const token = localStorage.getItem("token");
 const currentUser = JSON.parse(localStorage.getItem("user") || "null");
 
@@ -11,82 +16,93 @@ if (!token || !currentUser) {
   window.location.href = "index.html";
 }
 
-// ✅ Socket.IO connection WITH AUTH (JWT)
-const socket = io("http://localhost:5000", {
-  auth: {
-    token: token, // same JWT you use for APIs
-  },
+/*********************************
+ * SOCKET.IO
+ *********************************/
+const socket = io(SOCKET_URL, {
+  auth: { token },
 });
 
-// DOM elements
+/*********************************
+ * DOM ELEMENTS
+ *********************************/
 const messagesContainer = document.getElementById("messages");
 const messageForm = document.getElementById("message-form");
 const messageInput = document.getElementById("message-input");
+const typingSuggestions = document.getElementById("typing-suggestions");
+const smartReplies = document.getElementById("smart-replies");
+const usernameEl = document.getElementById("username");
+const avatarEl = document.getElementById("user-avatar");
 
-/* ---------- Helper: escape HTML ---------- */
-function escapeHtml(unsafe) {
-  return unsafe
+/*********************************
+ * STATE
+ *********************************/
+const loadedMessageIds = new Set(); // prevents duplicates
+
+/*********************************
+ * HELPERS
+ *********************************/
+function escapeHtml(text = "") {
+  return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/>/g, "&gt;");
 }
 
-/* ---------- Helper: add message to UI ---------- */
-function addMessageToUI(text, isMine, createdAt) {
-  const row = document.createElement("div");
-  row.className = `message-row ${isMine ? "sent" : "received"}`;
+function addMessage(message, isMine, id) {
+  // prevent duplicate messages
+  if (id && loadedMessageIds.has(id)) return;
+  if (id) loadedMessageIds.add(id);
 
-  const timeLabel = createdAt
-    ? new Date(createdAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-  row.innerHTML = `
+  const div = document.createElement("div");
+  div.className = `message-row ${isMine ? "sent" : "received"}`;
+  div.innerHTML = `
     <div class="message-bubble">
-      <div class="message-text">${escapeHtml(text)}</div>
-      <div class="message-meta">
-        <span class="message-time">${timeLabel}</span>
-      </div>
+      <div class="message-text">${escapeHtml(message)}</div>
     </div>
   `;
-
-  messagesContainer.appendChild(row);
+  messagesContainer.appendChild(div);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-/* ---------- Load all existing messages once ---------- */
+/*********************************
+ * LOAD MESSAGE HISTORY (REST)
+ *********************************/
 async function loadMessages() {
   try {
     const res = await fetch(API_URL, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     const data = await res.json();
-    if (!data.success) return;
-
     messagesContainer.innerHTML = "";
+    loadedMessageIds.clear();
 
-    data.messages.forEach((msg) => {
-      const isMine = msg.user_id === currentUser.id;
-      addMessageToUI(msg.message, isMine, msg.created_at);
+    (data.messages || []).forEach((m) => {
+      addMessage(m.message, m.user_id === currentUser.id, m.id);
     });
   } catch (err) {
-    console.error("Error loading messages:", err);
+    console.error("Load messages error:", err);
   }
 }
 
-/* ---------- Send a message (HTTP API) ---------- */
-async function sendMessageToServer(text) {
+/*********************************
+ * SEND MESSAGE (INSTANT UI)
+ *********************************/
+messageForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const text = messageInput.value.trim();
+  if (!text) return;
+
+  // 🔥 Optimistic UI (instant display)
+  const tempId = "temp-" + Date.now();
+  addMessage(text, true, tempId);
+
+  messageInput.value = "";
+  typingSuggestions.innerHTML = "";
+  smartReplies.innerHTML = "";
+
   try {
     const res = await fetch(API_URL, {
       method: "POST",
@@ -98,45 +114,114 @@ async function sendMessageToServer(text) {
     });
 
     const data = await res.json();
-    if (!data.success) {
-      alert(data.message || "Failed to send message");
-      return null;
-    }
 
-    return data.data; // { id, user_id, message, created_at }
+    // Replace temp ID with DB ID
+    if (data?.message?.id) {
+      loadedMessageIds.delete(tempId);
+      loadedMessageIds.add(data.message.id);
+    }
   } catch (err) {
-    console.error("Error sending message:", err);
-    alert("Server error");
-    return null;
+    console.error("Send message error:", err);
+  }
+});
+
+/*********************************
+ * SOCKET RECEIVE (REAL-TIME)
+ *********************************/
+socket.on("new-message", (msg) => {
+  addMessage(msg.message, msg.user_id === currentUser.id, msg.id);
+
+  if (msg.user_id !== currentUser.id) {
+    fetchSmartReplies(msg.message);
+  }
+});
+
+socket.on("connect_error", (err) => {
+  console.error("Socket error:", err.message);
+});
+
+/*********************************
+ * AI PREDICTIVE TYPING
+ *********************************/
+let typingTimer;
+
+messageInput.addEventListener("input", () => {
+  clearTimeout(typingTimer);
+
+  const text = messageInput.value.trim();
+  if (text.length < 5) return;
+
+  typingTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`${AI_URL}/predict`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      const data = await res.json();
+      typingSuggestions.innerHTML = "";
+
+      (data.suggestions || []).forEach((s) => {
+        const span = document.createElement("span");
+        span.textContent = s;
+        span.onclick = () => {
+          messageInput.value += " " + s;
+          typingSuggestions.innerHTML = "";
+          messageInput.focus();
+        };
+        typingSuggestions.appendChild(span);
+      });
+    } catch (err) {
+      console.error("AI predict error:", err);
+    }
+  }, 500);
+});
+
+/*********************************
+ * AI SMART REPLIES
+ *********************************/
+async function fetchSmartReplies(message) {
+  try {
+    const res = await fetch(`${AI_URL}/smart-replies`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ message }),
+    });
+
+    const data = await res.json();
+    smartReplies.innerHTML = "";
+
+    (data.replies || []).forEach((r) => {
+      const btn = document.createElement("button");
+      btn.textContent = r;
+      btn.onclick = () => {
+        messageInput.value = r;
+        smartReplies.innerHTML = "";
+        messageForm.dispatchEvent(new Event("submit"));
+      };
+      smartReplies.appendChild(btn);
+    });
+  } catch (err) {
+    console.error("AI smart reply error:", err);
   }
 }
 
-/* ---------- Form submit ---------- */
-messageForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = messageInput.value.trim();
-  if (!text) return;
+/*********************************
+ * USER INFO
+ *********************************/
+if (currentUser?.name) {
+  usernameEl.innerText = currentUser.name;
+  avatarEl.innerText = currentUser.name.charAt(0).toUpperCase();
+}
 
-  // Send via HTTP; WebSocket broadcast will handle UI
-  const saved = await sendMessageToServer(text);
-  if (saved) {
-    // ❌ DON'T add UI here – will come via "new-message"
-    messageInput.value = "";
-    messageInput.focus();
-  }
-});
-
-/* ---------- Listen for new messages from server (Socket.IO) ---------- */
-socket.on("new-message", (msg) => {
-  // msg = { id, user_id, message, created_at }
-  const isMine = msg.user_id === currentUser.id;
-  addMessageToUI(msg.message, isMine, msg.created_at);
-});
-
-/* ---------- Optional: handle socket errors ---------- */
-socket.on("connect_error", (err) => {
-  console.error("Socket connect error:", err.message);
-});
-
-/* ---------- Initial load ---------- */
+/*********************************
+ * INIT
+ *********************************/
 loadMessages();

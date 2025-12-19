@@ -3,6 +3,7 @@ const { Server } = require("socket.io");
 const { socketAuthMiddleware } = require("./middleware");
 const { registerChatHandlers } = require("./handlers/chat");
 const { registerPersonalChatHandlers } = require("./handlers/personalChat");
+const { registerGroupChatHandlers } = require("./handlers/groupChat");
 
 function initSocketServer(server, app) {
   const io = new Server(server, {
@@ -12,46 +13,22 @@ function initSocketServer(server, app) {
     },
   });
 
-  // authenticate sockets
   io.use(socketAuthMiddleware);
 
   io.on("connection", (socket) => {
-    console.log(
-      "🟢 New client connected:",
-      socket.id,
-      "userId:",
-      socket.user?.id
-    );
+    console.log("🟢 New client connected:", socket.id, "userId:", socket.user?.id);
 
-    // register handler modules for this socket
-    try {
-      registerChatHandlers(io, socket);
-    } catch (err) {
-      console.error("registerChatHandlers error:", err && err.message);
-    }
-
-    try {
-      registerPersonalChatHandlers(io, socket);
-    } catch (err) {
-      console.error("registerPersonalChatHandlers error:", err && err.message);
-    }
+    registerChatHandlers(io, socket);
+    registerPersonalChatHandlers(io, socket);
+    registerGroupChatHandlers(io, socket);
 
     socket.on("disconnect", () => {
-      console.log(
-        "🔴 Client disconnected:",
-        socket.id,
-        "userId:",
-        socket.user?.id
-      );
+      console.log("🔴 Client disconnected:", socket.id, "userId:", socket.user?.id);
     });
   });
 
-  // expose io to express routes
   app.set("io", io);
   return io;
 }
 
-// Important: export as CommonJS object with initSocketServer
-module.exports = {
-  initSocketServer,
-};
+module.exports = { initSocketServer };

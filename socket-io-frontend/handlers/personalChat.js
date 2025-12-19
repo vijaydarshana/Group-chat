@@ -1,117 +1,67 @@
 // socket-io/handlers/personalChat.js
-
 const { pool } = require("../../config/db");
 
-/**
- * Ensure personal_messages table exists.
- */
 async function ensureTable() {
-  const createSql = `
+  // table created in config/db init; keep for safety
+  const sql = `
     CREATE TABLE IF NOT EXISTS personal_messages (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      room_id VARCHAR(100) NOT NULL,
+      room_id VARCHAR(255) NOT NULL,
       sender_id INT NOT NULL,
       receiver_id INT NOT NULL,
       message TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `;
-  await pool.query(createSql);
+  await pool.query(sql);
 }
 
-/**
- * Register personal chat handlers
- * @param {import("socket.io").Server} io
- * @param {import("socket.io").Socket} socket
- */
 function registerPersonalChatHandlers(io, socket) {
-  // Ensure table (fire-and-forget)
-  ensureTable().catch((err) => {
-    console.error("Error ensuring personal_messages table:", err.message);
-  });
+  ensureTable().catch((err) => console.error("ensure personal_messages table:", err && err.message));
 
-  // join_room
-  socket.on("join_room", (payload = {}) => {
-    console.log("join_room payload:", payload, "socket.user:", socket.user?.id, "socket.id:", socket.id);
-    const { roomId } = payload;
+  socket.on("join_room", ({ roomId } = {}) => {
     if (!roomId) return;
-
-    try {
-      socket.join(roomId);
-      // ack the join
-      socket.emit("joined_room", { roomId });
-      console.log(`User ${socket.user?.id} joined room ${roomId} — socket.rooms:`, Array.from(socket.rooms));
-    } catch (err) {
-      console.error("join_room error:", err.message);
-    }
+    socket.join(roomId);
+    socket.emit("joined_room", { roomId });
+    console.log(`User ${socket.user?.id} joined room ${roomId}`);
   });
 
-  // new_message
   socket.on("new_message", async (payload = {}) => {
     try {
-      console.log("new_message payload RECEIVED on server:", payload, "socket.user:", socket.user?.id);
-
       const senderId = socket.user?.id;
-      if (!senderId) {
-        socket.emit("error_message", { message: "Not authenticated" });
-        return;
-      }
+      if (!senderId) return socket.emit("error_message", { message: "Not authenticated" });
 
-      // normalize incoming fields
-      const roomId = payload.roomId || payload.room_id;
-      const text = payload.text || payload.message;
-      const to = payload.to || payload.receiver_id;
-
-      if (!roomId || !text || !to) {
-        socket.emit("error_message", { message: "Invalid message payload" });
-        return;
-      }
+      const { roomId, text, to } = payload;
+      if (!roomId || !text || !to) return socket.emit("error_message", { message: "Invalid message payload" });
 
       const trimmed = String(text).trim();
-      if (!trimmed) {
-        socket.emit("error_message", { message: "Message is empty" });
-        return;
-      }
+      if (!trimmed) return socket.emit("error_message", { message: "Message is empty" });
 
-      // Save to DB
-      const insertSql =
-        "INSERT INTO personal_messages (room_id, sender_id, receiver_id, message) VALUES (?, ?, ?, ?)";
-      const [result] = await pool.query(insertSql, [
-        roomId,
-        senderId,
-        to,
-        trimmed,
-      ]);
+      const [result] = await pool.query(
+        "INSERT INTO personal_messages (room_id, sender_id, receiver_id, message) VALUES (?, ?, ?, ?)",
+        [roomId, senderId, to, trimmed]
+      );
 
-      const nowIso = new Date().toISOString();
       const saved = {
         id: result.insertId,
+        roomId,
         room_id: roomId,
-        roomId,                    // alias for client
         sender_id: senderId,
-        from: senderId,            // alias for client
+        from: senderId,
+        fromName: socket.user?.name,
         receiver_id: to,
-        to,                        // alias for client
+        to,
         message: trimmed,
-        created_at: nowIso,
-        createdAt: nowIso
+        created_at: new Date().toISOString(),
       };
 
-      console.log("Saved personal message:", saved);
-
-      // Emit to everyone in the room (including sender)
       io.to(roomId).emit("new_message", saved);
-      console.log("Emitted new_message to room", roomId);
-
-      // Acknowledge sender
       socket.emit("message_sent", saved);
     } catch (err) {
-      console.error("new_message handler error:", err.message);
+      console.error("personal new_message error:", err && err.message);
       socket.emit("error_message", { message: "Server error sending message" });
     }
   });
 }
 
-module.exports = {
-  registerPersonalChatHandlers,
-};
+module.exports = { registerPersonalChatHandlers };

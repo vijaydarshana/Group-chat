@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>Personal Chat (search by email)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="personal-chat.css" />
+  <link rel="stylesheet" href="./personal-chat.css" />
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
@@ -32,7 +32,11 @@
         <button id="leave-btn" style="float:right;padding:6px 10px;border-radius:6px;border:none;background:#ff5e5e;color:#fff;cursor:pointer">Leave</button>
       </div>
 
-      <div id="messages" class="messages"></div>
+      <!-- <div id="messages" class="messages"></div> -->
+<ul id="messages" class="messages"></ul>
+
+<div id="typing-suggestions" class="ai-suggestions"></div>
+<div id="smart-replies" class="ai-replies"></div>
 
       <form id="message-form" class="input-area">
         <input id="message-input" type="text" placeholder="Type a message..." autocomplete="off" />
@@ -41,6 +45,6 @@
     </section>
   </div>
 
-  <script src="personal-chat.js"></script>
+  <script src="./personal-chat.js"></script>
 </body>
 </html>
